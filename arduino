@@ -1,0 +1,238 @@
+/*
+ Basic ESP8266 MQTT publish client example for a moisture sensor
+*/
+#include <ESP8266WiFi.h>
+#include <PubSubClient.h>
+
+//ssid = "Samsung Galaxy J3"; //Wireless network name (SSID)
+//password = "9209172655"; //WiFi network password (WPA2)
+
+//Mitchell's iPhone
+//GreenandGold
+
+//Labwifi Richard
+//warcraft1
+
+//Chris_phone
+//Photoshop01
+
+//SeanS
+//aayemelon36
+
+//SeanS
+//aayemelon36
+
+//HazSpot
+//Nada0077
+
+/*
+52.14.125.99
+*/
+
+// Update these with values suitable for your network.
+const char* ssid = "Hide Yo Kids, Hide Yo Wi-Fi"; //
+const char* password = "nicksmells"; //
+const char* mqtt_server = "m16.cloudmqtt.com";
+const char* topic = "voltage";
+const char* user = "gtwkgblc";
+const char* userPassword = "-1srSuC3HZ1E";
+const int mqtt_port = 12131;
+const int red = D0;
+const int yel = D3;
+
+const char* input_topic = "MQTTtoboard"; //Node-Red MQTT topics. This must match the topic in the Mosca MQTT broker running in Node-Red.
+const char* output_topic = "out"; 
+
+//Constants:
+unsigned long lastConnectionTime = 0; 
+const int postingInterval = 5 * 1000; //Time interval for publishing (in milliseconds)
+const float adc_to_v_factor = 3.3/1024; //Volts/ADC sample points
+const float adc_to_v_offset = -0.06; //Offset to get voltage value closer to real value. This can be changed.
+
+//Measurement information:
+const char* measurement_unit = "Voltage (V)"; //Name and units of what you are measurement with your sensor (for outputting to the serial console)
+float hi_thres = 1.0; //Default high threshold until new value is received from MQTT server
+float lo_thres = 0.5; //Default low threshold until new value is received from MQTT server
+
+//ADC pin information:
+const int analogIn  = A0; //Pin A0 is an analog in pin. Capable of reading voltages from 0V to 3.3V.
+float readingIn = 0; //Initialize readingIn value to zero
+
+WiFiClient espClient;
+PubSubClient client(espClient);
+
+void setup_wifi() {
+  // Connecting to a WiFi network
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("WiFi connected");
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
+}
+
+void reconnect() {
+  // Loop until we're reconnected
+  Serial.println("In reconnect...");
+  while (!client.connected()) {
+    Serial.print("Attempting MQTT connection...");
+    // Attempt to connect
+    if (client.connect("Pound",user,userPassword)) {
+      Serial.println("connected");
+    } else {
+      Serial.print("failed, rc=");
+      Serial.print(client.state());
+      Serial.println(" try again in 5 seconds");
+      delay(5000);
+    }
+  }
+}
+//FUNCTION: Switch LEDs on/off based on threshold values set by user
+void thresholdCheck(float x)
+{
+  //Turn pins D0 and D3 on/off based on Project 3 requirements:
+  //float newlow = lo_thres;     // eventually convert to inches e.g., 9"
+  //float newHi  = hi_thres;     // eventually 11"
+  if(x <= lo_thres)        
+    digitalWrite(red, HIGH);
+
+  else if (x <= hi_thres)
+    digitalWrite(yel, HIGH);
+
+  else
+  {
+    digitalWrite(red, LOW); 
+    digitalWrite(yel, LOW);
+  }
+}
+
+//FUNCTION: Publish measurement to MQTT server
+void mqttPublish(float readingIn) {
+
+  //Convert readingIn from float to char array. Might cause a buffer overflow
+  char buf[25]; 
+  sprintf(buf, "%f", readingIn);
+
+  //Publish to MQTT server
+//  if(mqttClient.publish(output_topic, buf ) )
+//  {
+//    Serial.println("Publishing to MQTT server... DONE! ");
+//    Serial.print(">> Topic: ");
+//    Serial.println(output_topic);
+//    Serial.print(">> Payload: ");
+//    Serial.println(buf);
+//  }
+  
+  lastConnectionTime = millis(); //Update last connection time
+}
+
+//FUNCTION: Sample voltage and return value measured in volts
+float getVoltageReading()
+{
+  return (adc_to_v_factor*analogRead(analogIn) + adc_to_v_offset); // offset
+  
+}
+
+//FUNCTION: Convert voltage sample to your measurement value. This function will vary depending on the sensor.
+float convertVoltage(float readingIn)
+{
+  float measurement = readingIn; //Edit this line to convert your measured voltage to your measurement value
+  return measurement;
+}
+
+//FUNCTION: MQTT message callback function. Handles what needs to be done if a MQTT message is received. This function can be edited as needed but its arguments MUST NOT be changed. The payload is formatted as a byte array (byte*).
+void callback(char* topic, byte* payload, unsigned int length) 
+{
+  //Inform user MQTT message received by printing to serial console
+  Serial.println("Reading from MQTT server... DONE!");
+  Serial.print(">> Topic: ");
+  Serial.println(topic);
+
+  char pl[length];
+  String numone, numtwo;
+  int firstnum, secondnum;
+  
+  //Convert the incoming MQTT message from Node-Red (in the format AAA;BBB, where AAA and BBB are numbers of an unknown length) to two value that can be used to set the high and low thresholds:
+  //There is most likely a better way to do this:
+  for (int i=0;i<length;i++) 
+  {  
+    pl[i] = (char)payload[i]; 
+  }
+  for(int j=0; j< length; j++)
+  {
+    if(pl[j] == ';')
+    {
+      firstnum = j;
+    }
+  }
+  secondnum = length - firstnum;
+  for(int k=0; k<firstnum; k++)
+  {
+    numone+=pl[k];
+  }
+  for(int l = firstnum + 1; l < length; l++)
+  {
+    numtwo += pl[l];
+  }
+  
+  lo_thres = numone.toFloat(); //Update low threshold for LEDs
+  hi_thres = numtwo.toFloat(); //Update high threshold for LEDs
+
+  //Print MQTT message information
+  Serial.print(">> Payload: ");
+  Serial.println(pl); 
+
+  //Print new threshold values
+  Serial.println("Threshold values updated:");
+  Serial.print(">> High threshold updated: ");
+  Serial.println(hi_thres);
+  Serial.print(">> Low threshold updated: ");
+  Serial.println(lo_thres);
+}
+
+//=========================SETUP===================
+void setup() {
+  Serial.begin(9600);
+  setup_wifi();
+  client.setServer(mqtt_server, mqtt_port);
+  client.setCallback(callback); //Set callback function for halding incoming MQTT messages
+  
+  pinMode(red, OUTPUT); // Set pin D0 and D3 to output
+  pinMode(yel, OUTPUT); // and D3 to output
+  digitalWrite(red, LOW); 
+  digitalWrite(yel, LOW);
+}
+
+
+void loop() {
+  char msg[10];
+  char msgtext[25];
+  String themsg;
+  if (!client.connected()) {
+    reconnect();
+    client.subscribe(input_topic);
+  }
+
+  client.loop();  //Call the loop to continuously connect to the server
+  
+  int voltage = analogRead(A0);  // reads A0 and convert to volts
+  Serial.print("Digital value: ");
+  Serial.println(voltage);
+  
+  // 0V → 18  digital
+  // 1V → 372  
+  //                    symbolab.com
+  float analog = 1.0;
+  analog = voltage*0.00329 - 0.05921;
+  Serial.print("Analog value: ");
+  Serial.println(analog);
+  
+  //float measurement = convertVoltage(getVoltageReading()); //Get voltage and convert to the unit being measured
+  thresholdCheck(analog); //Check that it falls within the user set threshold values
+
+  sprintf(msg,"%i",voltage);
+  client.publish("voltage", msg);
+  delay(5000);
+}
