@@ -1,5 +1,5 @@
 /*
- Basic ESP8266 MQTT publish client example for a moisture sensor
+ Basic ESP8266 MQTT publish client
 */
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
